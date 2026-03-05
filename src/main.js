@@ -52,11 +52,11 @@ _You **can** combine them_
 
 ## Images
 
-![This is an alt text.](/image/Markdown-mark.svg "This is a sample image.")
+![This is an alt text.](image/Markdown-mark.svg "This is a sample image.")
 
 ## Links
 
-You may be using [Markdown Live Preview](https://markdownlivepreview.com/).
+You may be using this Markdown Live Preview app.
 
 ## Blockquotes
 
@@ -247,23 +247,40 @@ This web site is using ${"`"}markedjs/marked${"`"}.
 
     // ----- clipboard utils -----
 
-    let copyToClipboard = (text, successHandler, errorHandler) => {
-        navigator.clipboard.writeText(text).then(
-            () => {
-                successHandler();
-            },
+    let copyToClipboard = (html, text, successHandler, errorHandler) => {
+        const plainText = text || '';
+        const htmlText = html || '';
 
-            () => {
-                errorHandler();
-            }
-        );
+        if (!navigator.clipboard) {
+            errorHandler();
+            return;
+        }
+
+        // Prefer rich clipboard format and include plain text for compatibility.
+        if (window.ClipboardItem && htmlText) {
+            const clipboardItem = new ClipboardItem({
+                'text/html': new Blob([htmlText], { type: 'text/html' }),
+                'text/plain': new Blob([plainText], { type: 'text/plain' })
+            });
+            navigator.clipboard.write([clipboardItem]).then(
+                () => {
+                    successHandler();
+                },
+                () => {
+                    navigator.clipboard.writeText(plainText).then(successHandler, errorHandler);
+                }
+            );
+            return;
+        }
+
+        navigator.clipboard.writeText(plainText).then(successHandler, errorHandler);
     };
 
     let notifyCopied = () => {
         let labelElement = document.querySelector("#copy-button a");
         labelElement.innerHTML = "Copied!";
         setTimeout(() => {
-            labelElement.innerHTML = "Copy";
+            labelElement.innerHTML = "Copy rich";
         }, 1000)
     };
 
@@ -374,8 +391,12 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     let setupCopyButton = (editor) => {
         document.querySelector("#copy-button").addEventListener('click', (event) => {
             event.preventDefault();
-            let value = editor.getValue();
-            copyToClipboard(value, () => {
+            const outputElement = document.querySelector('#output');
+            const markdownValue = editor.getValue();
+            const plainText = outputElement ? outputElement.innerText : markdownValue;
+            const richHtml = outputElement ? outputElement.innerHTML : '';
+
+            copyToClipboard(richHtml, plainText, () => {
                 notifyCopied();
             },
                 () => {
