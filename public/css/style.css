@@ -69,6 +69,10 @@ header a:hover {
     margin-left: 16px;
 }
 
+#paste-rich-button {
+    margin-left: 16px;
+}
+
 #export-button {
     margin-left: 16px;
 }
@@ -208,4 +212,102 @@ footer {
 
 [data-theme="dark"] footer {
   background-color: #333;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-sizing: border-box;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-dialog h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-dialog p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.modal-editable {
+  min-height: 220px;
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 10px;
+  outline: none;
+  white-space: normal;
+}
+
+.modal-editable:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 1px #0969da;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-actions button {
+  border: 1px solid #d0d7de;
+  background: #f6f8fa;
+  color: #24292f;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.modal-actions button#paste-rich-apply {
+  border-color: #1f883d;
+  background: #2da44e;
+  color: #fff;
+}
+
+[data-theme="dark"] .modal-dialog {
+  background: #212830;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+}
+
+[data-theme="dark"] .modal-editable {
+  border-color: #444c56;
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+[data-theme="dark"] .modal-actions button {
+  border-color: #444c56;
+  background: #30363d;
+  color: #e6edf3;
+}
+
+[data-theme="dark"] .modal-actions button#paste-rich-apply {
+  border-color: #238636;
+  background: #238636;
 }

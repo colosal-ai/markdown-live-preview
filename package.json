@@ -23,6 +23,7 @@
     "github-markdown-css": "^5.8.1",
     "marked": "^15.0.7",
     "monaco-editor": "^0.52.2",
-    "storehouse-js": "github:tanabe/Storehouse-js"
+    "storehouse-js": "github:tanabe/Storehouse-js",
+    "turndown": "^7.2.2"
   }
 }

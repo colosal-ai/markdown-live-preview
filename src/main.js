@@ -2,6 +2,7 @@ import Storehouse from 'storehouse-js';
 import * as monaco from 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/+esm';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import TurndownService from 'turndown';
 
 const init = () => {
     let hasEdited = false;
@@ -12,6 +13,10 @@ const init = () => {
     const localStorageScrollBarKey = 'scroll_bar_settings';
     const localStorageThemeKey = 'theme_settings';
     const confirmationMessage = 'Are you sure you want to reset? Your changes will be lost.';
+    const turndownService = new TurndownService({
+        headingStyle: 'atx',
+        codeBlockStyle: 'fenced'
+    });
     // default template
     const defaultInput = `# Markdown syntax guide
 
@@ -284,6 +289,17 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         }, 1000)
     };
 
+    let notifyImported = () => {
+        let labelElement = document.querySelector("#paste-rich-button a");
+        if (!labelElement) {
+            return;
+        }
+        labelElement.innerHTML = "Imported!";
+        setTimeout(() => {
+            labelElement.innerHTML = "Paste rich";
+        }, 1000)
+    };
+
     // ----- export preview -----
 
     let exportLightCssPromise = null;
@@ -413,6 +429,78 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         exportButton.addEventListener('click', (event) => {
             event.preventDefault();
             exportPreviewToPdf();
+        });
+    };
+
+    let setupPasteRichModal = (editorInstance) => {
+        const openButton = document.querySelector('#paste-rich-button');
+        const modal = document.querySelector('#paste-rich-modal');
+        const input = document.querySelector('#paste-rich-input');
+        const applyButton = document.querySelector('#paste-rich-apply');
+        const cancelButtons = document.querySelectorAll('[data-close-modal="paste-rich-modal"]');
+
+        if (!openButton || !modal || !input || !applyButton) {
+            return;
+        }
+
+        const openModal = () => {
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            input.innerHTML = '';
+            setTimeout(() => input.focus(), 0);
+        };
+
+        const closeModal = () => {
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+        };
+
+        const applyPastedContent = () => {
+            const html = input.innerHTML.trim();
+            const plainText = input.innerText.trim();
+            const hasHtml = html && html !== '<br>';
+            const markdown = hasHtml ? turndownService.turndown(html) : plainText;
+
+            if (!markdown) {
+                closeModal();
+                return;
+            }
+
+            editorInstance.setValue(markdown);
+            editorInstance.revealPosition({ lineNumber: 1, column: 1 });
+            editorInstance.focus();
+            hasEdited = true;
+            closeModal();
+            notifyImported();
+        };
+
+        openButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            openModal();
+        });
+
+        applyButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            applyPastedContent();
+        });
+
+        cancelButtons.forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                closeModal();
+            });
+        });
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('open')) {
+                closeModal();
+            }
         });
     };
 
@@ -549,6 +637,7 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     }
     setupResetButton();
     setupCopyButton(editor);
+    setupPasteRichModal(editor);
     setupExportButton();
 
     let scrollBarSettings = loadScrollBarSettings() || false;
