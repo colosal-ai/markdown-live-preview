@@ -280,6 +280,24 @@ footer {
   white-space: normal;
 }
 
+.modal-editable table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.modal-editable th,
+.modal-editable td {
+  border: 1px solid var(--colosal-border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.modal-editable th {
+  font-weight: 600;
+}
+
 .modal-editable:focus {
   border-color: var(--colosal-action-border);
   box-shadow: 0 0 0 1px var(--colosal-action-border);

@@ -2,6 +2,8 @@
 
 Markdown Live Preview is a tiny web tool to preview Markdown formatted text.
 
+**Live demo:** https://colosal-ai.github.io/markdown-live-preview/
+
 ## Setup
 
 ```

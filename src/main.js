@@ -4,6 +4,152 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 
+const parseStyleDeclaration = (styleText) => {
+    const styles = {};
+    String(styleText || '').split(';').forEach((part) => {
+        const separator = part.indexOf(':');
+        if (separator === -1) return;
+        const key = part.slice(0, separator).trim().toLowerCase();
+        const value = part.slice(separator + 1).trim().toLowerCase();
+        if (key && value) styles[key] = value;
+    });
+    return styles;
+};
+
+const isBoldWeight = (value) => {
+    const weight = String(value || '').trim().toLowerCase();
+    if (!weight || weight === 'normal' || weight === 'lighter') return false;
+    if (weight === 'bold' || weight === 'bolder') return true;
+    const numeric = parseInt(weight, 10);
+    return !Number.isNaN(numeric) && numeric >= 600;
+};
+
+const isItalicStyle = (value) => {
+    const style = String(value || '').trim().toLowerCase();
+    return style === 'italic' || style === 'oblique';
+};
+
+const getNodeInlineFlags = (node) => {
+    const attrStyles = parseStyleDeclaration(node.getAttribute && node.getAttribute('style'));
+    const fontWeight = (node.style && node.style.fontWeight) || attrStyles['font-weight'] || '';
+    const fontStyle = (node.style && node.style.fontStyle) || attrStyles['font-style'] || '';
+    return {
+        bold: isBoldWeight(fontWeight),
+        italic: isItalicStyle(fontStyle)
+    };
+};
+
+const installRichTextStyleRules = (turndownService) => {
+    // Docs/Word/LibreOffice often paste bold/italic as styled <span>, not <strong>/<em>.
+    turndownService.addRule('styledBoldItalic', {
+        filter: (node) => {
+            if (!node || node.nodeType !== 1) return false;
+            if (node.nodeName !== 'SPAN' && node.nodeName !== 'FONT') return false;
+            const flags = getNodeInlineFlags(node);
+            return flags.bold || flags.italic;
+        },
+        replacement: (content, node) => {
+            const trimmed = content.trim();
+            if (!trimmed) return content;
+
+            const flags = getNodeInlineFlags(node);
+            let markdown = trimmed;
+            if (flags.italic) markdown = `_${markdown}_`;
+            if (flags.bold) markdown = `**${markdown}**`;
+
+            const leading = content.match(/^\s*/)?.[0] || '';
+            const trailing = content.match(/\s*$/)?.[0] || '';
+            return `${leading}${markdown}${trailing}`;
+        }
+    });
+};
+
+const installHtmlTableRules = (turndownService) => {
+    const alignMap = { left: ':---', right: '---:', center: ':---:' };
+
+    const isDataCell = (node) => node.nodeName === 'TH' || node.nodeName === 'TD';
+
+    const cellNodesOf = (row) => Array.from(row.childNodes).filter(isDataCell);
+
+    const cleanCellContent = (content) => content
+        .replace(/\u00a0/g, ' ')
+        .replace(/\r?\n+/g, ' ')
+        .replace(/\|/g, '\\|')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const cellAlign = (cell) => {
+        const align = (
+            cell.getAttribute('align')
+            || (cell.style && cell.style.textAlign)
+            || ''
+        ).toLowerCase();
+        if (align.includes('center')) return 'center';
+        if (align.includes('right')) return 'right';
+        if (align.includes('left')) return 'left';
+        return null;
+    };
+
+    const formatCell = (content, node) => {
+        const index = cellNodesOf(node.parentNode).indexOf(node);
+        const prefix = index === 0 ? '| ' : ' ';
+        return `${prefix}${cleanCellContent(content) || ' '} |`;
+    };
+
+    const isHeadingRow = (tr) => {
+        if (!tr || tr.nodeName !== 'TR') return false;
+        const parent = tr.parentNode;
+        if (!parent) return false;
+        if (parent.nodeName === 'THEAD') return true;
+
+        const table = parent.nodeName === 'TABLE' ? parent : parent.parentNode;
+        if (!table || table.nodeName !== 'TABLE') return false;
+
+        const firstRow = table.querySelector('tr');
+        return firstRow === tr;
+    };
+
+    turndownService.addRule('tableCell', {
+        filter: ['th', 'td'],
+        replacement: (content, node) => formatCell(content, node)
+    });
+
+    turndownService.addRule('tableRow', {
+        filter: 'tr',
+        replacement: (content, node) => {
+            const cells = cellNodesOf(node);
+            if (!cells.length) return '';
+
+            const rowMarkdown = `\n${content.trim()}`;
+            if (!isHeadingRow(node)) {
+                return rowMarkdown;
+            }
+
+            const borderCells = cells.map((cell, index) => {
+                const border = alignMap[cellAlign(cell)] || '---';
+                return `${index === 0 ? '| ' : ' '}${border} |`;
+            }).join('');
+
+            return `${rowMarkdown}\n${borderCells}`;
+        }
+    });
+
+    turndownService.addRule('tableSection', {
+        filter: ['thead', 'tbody', 'tfoot'],
+        replacement: (content) => content
+    });
+
+    turndownService.addRule('table', {
+        filter: 'table',
+        replacement: (content) => {
+            const normalized = content
+                .replace(/\n+/g, '\n')
+                .trim();
+            return normalized ? `\n\n${normalized}\n\n` : '';
+        }
+    });
+};
+
 const init = () => {
     let hasEdited = false;
     let scrollBarSync = false;
@@ -17,6 +163,8 @@ const init = () => {
         headingStyle: 'atx',
         codeBlockStyle: 'fenced'
     });
+    installRichTextStyleRules(turndownService);
+    installHtmlTableRules(turndownService);
     // default template
     const defaultInput = `# Markdown syntax guide
 
@@ -473,6 +621,22 @@ This web site is using ${"`"}markedjs/marked${"`"}.
             closeModal();
             notifyImported();
         };
+
+        // Prefer clipboard HTML so tables from Sheets/Excel/Word stay as <table>.
+        input.addEventListener('paste', (event) => {
+            const clipboard = event.clipboardData;
+            if (!clipboard) return;
+
+            const html = clipboard.getData('text/html');
+            if (!html) return;
+
+            event.preventDefault();
+            const sanitized = DOMPurify.sanitize(html, {
+                USE_PROFILES: { html: true },
+                ADD_ATTR: ['style', 'align', 'class']
+            });
+            document.execCommand('insertHTML', false, sanitized);
+        });
 
         openButton.addEventListener('click', (event) => {
             event.preventDefault();
